@@ -1,1 +1,2 @@
-from core.create_connect import bot, dp
+from .config import BOT_TOKEN, ADMIN_ID, URL_DOMAIN, URL_PATH, SERVER_HOST, SERVER_PORT
+from .config import DATABASE_USER, DATABASE_PASSWORD, DATABASE_HOST, DATABASE_PORT, DATABASE_NAME

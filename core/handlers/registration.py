@@ -2,20 +2,24 @@ from aiogram import types, Dispatcher
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters import Text
-from core.keyboards import get_data_on_keyboard, check_keyboard, get_kb_back_cancel, get_kb_back_skip_cancel
-from core.keyboards.registration_kb import get_kb_groups
+
+import db.queries.queries
+from core.keyboards import *
+from db.models import User
+from db.queries.queries import insert_user, insert_groups_user
 
 
-class Registration(StatesGroup):
+class RegistrationState(StatesGroup):
     fullname = State()
     shortname = State()
     photo = State()
     groups = State()
+    end_reg = State()
 
 
 async def registration_start(message: types.Message):
     await message.answer('Начат процесс регистрации для отмены нажмите /cancel: \nВведите ФИО:')
-    await Registration.fullname.set()
+    await RegistrationState.fullname.set()
 
 
 async def get_fullname(message: types.Message, state: FSMContext):
@@ -28,7 +32,7 @@ async def get_fullname(message: types.Message, state: FSMContext):
         await message.answer(f'Ваше ФИО: {data["fullname"]}\nТеперь введите псевдоним, он должен быть '
                              'коротким(в одно слово) и понятным для других пользователей',
                              reply_markup=get_kb_back_cancel())
-        await Registration.next()
+        await RegistrationState.next()
 
 
 async def get_shortname(message: types.Message, state: FSMContext):
@@ -43,7 +47,7 @@ async def get_shortname(message: types.Message, state: FSMContext):
                 data['shortname'] = message.text.strip().title()
             await message.answer(f'Ваш псевдоним: {data["shortname"]}\nТеперь отправьте фото',
                                  reply_markup=get_kb_back_skip_cancel())
-            await Registration.next()
+            await RegistrationState.next()
 
 
 async def get_photo(message: types.Message, state: FSMContext):
@@ -51,31 +55,35 @@ async def get_photo(message: types.Message, state: FSMContext):
         pass
     else:
         if message.text == '⏭️ Пропустить':
+            async with state.proxy() as data:
+                data['photo'] = None
             await message.answer('Фото (нет), выберите группы в которых вы состоите',
                                  reply_markup=types.ReplyKeyboardRemove())
-            await message.answer('Выберите группы: ', reply_markup=get_kb_groups())
-            await Registration.next()
+            kb = get_kb_inline_groups(await db.queries.queries.select_all_groups())
+            await message.answer('Выберите группы: ', reply_markup=kb)
+            await RegistrationState.next()
         else:
             if not message.photo:
                 await message.answer('Отправлять можно только, сжатые фотографии')
             else:
                 async with state.proxy() as data:
                     data['photo'] = message.photo[-1].file_id
-                await message.answer('Выберите группы: ', reply_markup=get_kb_groups())
-                await Registration.next()
+                kb = get_kb_inline_groups(await db.queries.queries.select_all_groups())
+                await message.answer('Выберите группы: ', reply_markup=kb)
+                await RegistrationState.next()
 
 
 async def get_groups(call: types.CallbackQuery, state: FSMContext):
-    if call.data == 'post_done':
+    if call.data == 'group_done':
         keyboard = call.message.reply_markup['inline_keyboard']
-        post_list = ", ".join(get_data_on_keyboard(keyboard))
+        groups = get_data_on_keyboard(keyboard)
         async with state.proxy() as data:
-            data['groups'] = post_list
-        await call.message.answer(f'Регистрация завершина! Для изменения данных зарегистрируйтесь заново /reg')
+            data['groups'] = groups
+        await call.message.answer(f'Проверьте данные: ', reply_markup=get_kb_back_done())
         await get_profile(message=call.message, state=state)
-        await state.finish()
-    elif call.data == 'post_back':
-        await Registration.previous()
+        await RegistrationState.next()
+    elif call.data == 'group_back':
+        await RegistrationState.previous()
         await call.message.answer(f'Отправьте фото', reply_markup=get_kb_back_skip_cancel())
     else:
         keyboard = call.message.reply_markup['inline_keyboard']
@@ -84,18 +92,42 @@ async def get_groups(call: types.CallbackQuery, state: FSMContext):
     await call.answer()
 
 
+async def check_data(message: types.Message, state: FSMContext):
+    if message.text == '✅ Готово':
+        async with state.proxy() as data:
+            user = User(telegram_id=message.chat.id,
+                        fullname=data['fullname'],
+                        shortname=data['shortname'],
+                        photo=data['photo'],
+                        telegram_name=f'{message.chat.first_name} {message.chat.last_name}',
+                        telegram_username=message.chat.username)
+        await insert_user(user)
+        if not not data['groups']:
+            await insert_groups_user(message.chat.id, data['groups'])
+        await message.answer('Регистрация завершина', reply_markup=types.ReplyKeyboardRemove())
+        await state.finish()
+    elif message.text == '⬅️ Назад':
+        kb = get_kb_inline_groups(await db.queries.queries.select_all_groups())
+        await message.answer('Удаление клавиатуры', reply_markup=types.ReplyKeyboardRemove())
+        await message.answer('Выберите группы: ', reply_markup=kb)
+        await RegistrationState.previous()
+    else:
+        await message.answer('Команда нераспознана, используйте клавиатуру')
+
+
 def register_handler(dp: Dispatcher):
     dp.register_message_handler(registration_start, commands=['reg'])
-    dp.register_message_handler(get_fullname, state=Registration.fullname)
-    dp.register_message_handler(get_shortname, state=Registration.shortname)
-    dp.register_message_handler(get_photo, content_types=['photo', 'text'], state=Registration.photo)
-    dp.register_callback_query_handler(get_groups, Text(startswith='post'), state=Registration.groups)
+    dp.register_message_handler(get_fullname, state=RegistrationState.fullname)
+    dp.register_message_handler(get_shortname, state=RegistrationState.shortname)
+    dp.register_message_handler(get_photo, content_types=['photo', 'text'], state=RegistrationState.photo)
+    dp.register_callback_query_handler(get_groups, Text(startswith='group'), state=RegistrationState.groups)
+    dp.register_message_handler(check_data, state=RegistrationState.end_reg)
 
 
 async def state_back(message, state, text):
     if message.text == '⬅️ Назад':
         await message.answer(text)
-        await Registration.previous()
+        await RegistrationState.previous()
         return True
     elif message.text == '🚫 Отмена':
         await message.answer('Регистрация прервана')
@@ -106,14 +138,13 @@ async def state_back(message, state, text):
 
 
 async def get_profile(message: types.Message, state: FSMContext):
-    # Вынести в отдельный модуль, сделать выборку из БД
     async with state.proxy() as data:
         text = ('Ваш профиль:\n'
                 f'ID: {message.chat.id}\n'
                 f'ФИО: {data["fullname"]}\n'
                 f'Псевдоним: {data["shortname"]}\n'
-                f'Группы: {data["groups"]}')
-    try:
+                f'Группы: {", ".join(data["groups"])}')
+    if data['photo'] is not None:
         await message.answer_photo(photo=data["photo"], caption=text)
-    except:
+    else:
         await message.answer(text)

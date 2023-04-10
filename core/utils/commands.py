@@ -20,5 +20,13 @@ async def set_commands(bot: Bot):
             command='test',
             description='Тестирование'
         ),
+        BotCommand(
+            command='add_group',
+            description='Добавить группу'
+        ),
+        BotCommand(
+            command='profile',
+            description='Показать профиль'
+        ),
     ]
     await bot.set_my_commands(commands, BotCommandScopeDefault())

@@ -4,7 +4,7 @@ from aiogram.utils import executor
 
 from core import URL_DOMAIN, URL_PATH, SERVER_PORT, SERVER_HOST, ADMIN_ID
 from core.create_connect import bot, dp
-from core.handlers import basic, registration, last, test
+from core.handlers import basic, registration, last, test, admin
 from core.utils import commands
 
 
@@ -25,6 +25,7 @@ async def on_shutdown(_):
 
 test.register_handler(dp)
 basic.register_handler(dp)
+admin.register_handler(dp)
 registration.register_handler(dp)
 last.register_handler(dp)
 

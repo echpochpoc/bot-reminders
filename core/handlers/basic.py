@@ -1,11 +1,21 @@
 from aiogram import types, Dispatcher
 from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters import Text
 from db.queries import queries
 from db.models import User
+from core.keyboards.keyboards import get_kb_main_menu
 
 
 async def start_handler(message: types.Message):
-    await message.answer('Привет, я бот-напоминалка')
+    kb = get_kb_main_menu()
+    await message.answer('Привет, я бот-напоминалка зарегистрируйся /reg',
+                         reply_markup=kb)
+
+
+async def send_kb_main_menu(message: types.Message):
+    kb = get_kb_main_menu()
+    await message.answer('Клавиатура создана',
+                         reply_markup=kb)
 
 
 async def cancel_handler(message: types.Message, state: FSMContext):
@@ -32,5 +42,6 @@ async def send_profile(message: types.Message):
 
 def register_handler(dp: Dispatcher):
     dp.register_message_handler(start_handler, commands=['start'])
+    dp.register_message_handler(send_kb_main_menu, commands=['keyboard'])
     dp.register_message_handler(cancel_handler, commands=['cancel'], state='*')
-    dp.register_message_handler(send_profile, commands='profile')
+    dp.register_message_handler(send_profile, Text(startswith='🌝Профиль'))

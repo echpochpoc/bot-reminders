@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy import Column, Integer, ForeignKey, Boolean
 from .base import BaseModel
 
 
@@ -7,6 +7,7 @@ class ReminderUser(BaseModel):
 
     user_id = Column(Integer, ForeignKey('users.id'))
     reminder_id = Column(Integer, ForeignKey('reminders.id'))
+    done = Column(Boolean, default=False)
 
     def __init__(self, user_id, reminder_id):
         self.user_id = user_id

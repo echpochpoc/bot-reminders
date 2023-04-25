@@ -8,11 +8,14 @@ from core.create_connect import bot, dp
 from core.handlers import basic, registration, last, test, admin, reminder, mailing
 from core.utils import commands
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 
 async def on_startup(_):
     await bot.delete_webhook()
     await bot.set_webhook(URL_DOMAIN)
     await commands.set_commands(bot)
+    scheduler.start()
     await bot.send_message(chat_id=ADMIN_ID, text='Погнали!🌝')
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - [%(levelname)s] - %(name)s - '
@@ -23,6 +26,9 @@ async def on_shutdown(_):
     await bot.delete_webhook()
     await bot.send_message(chat_id=ADMIN_ID, text='Пррр...🌚')
 
+
+scheduler = AsyncIOScheduler()
+scheduler.add_job(mailing.send_reminder_scheduler, "interval", seconds=60, args=())
 
 test.register_handler(dp)
 basic.register_handler(dp)
@@ -43,3 +49,4 @@ if __name__ == '__main__':
         port=SERVER_PORT
     )
     dp.filters_factory.bind(core.filters.filters.StateClassFilter)
+

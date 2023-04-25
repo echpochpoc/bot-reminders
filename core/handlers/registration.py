@@ -5,7 +5,7 @@ from aiogram.dispatcher.filters import Text
 
 import core.handlers.basic
 from core.filters import StateClassFilter
-from core.keyboards import *
+from core.keyboards import keyboards
 
 from db.queries import queries
 from db.models import User
@@ -19,13 +19,17 @@ class RegistrationState(StatesGroup):
     end_reg = State()
 
 
-async def registration_start(message: types.Message):
+async def registration_start(message: types.Message) -> None:
     await message.answer('Регистрация, для отмены нажмите /cancel')
     await msg_get_fullname(message)
 
 
+async def registration_cancel(message: types.Message) -> None:
+    pass
+
+
 async def msg_get_fullname(message: types.Message):
-    kb = get_kb_back()
+    kb = keyboards.get_kb_back()
     await message.answer('Введите ФИО или просто фамилию имя',
                          reply_markup=kb)
     await RegistrationState.fullname.set()
@@ -56,7 +60,7 @@ async def get_shortname(message: types.Message, state: FSMContext):
 
 
 async def msg_get_photo(message: types.Message):
-    kb = get_inline_skip()
+    kb = keyboards.get_inline_skip()
     await message.answer('Отправьте фото', reply_markup=kb)
     await RegistrationState.photo.set()
 
@@ -76,7 +80,7 @@ async def skip_photo(call: types.CallbackQuery, state: FSMContext):
 
 
 async def msg_get_groups(message: types.Message):
-    kb = get_kb_inline_groups(await queries.select_all_groups())
+    kb = keyboards.get_kb_inline_groups(await queries.select_all_groups())
     await message.answer('Выберите группы: ', reply_markup=kb)
     await RegistrationState.groups.set()
 
@@ -84,12 +88,12 @@ async def msg_get_groups(message: types.Message):
 async def get_groups(call: types.CallbackQuery, state: FSMContext):
     if call.data == 'group_done':
         keyboard = call.message.reply_markup['inline_keyboard']
-        groups = get_text_on_buttons_kb(keyboard)
+        groups = keyboards.get_text_on_buttons_kb(keyboard)
         await state.update_data(groups=groups)
         await complete_registration(call.message, state)
     else:
         keyboard = call.message.reply_markup['inline_keyboard']
-        new_keyboard = check_keyboard(keyboard, call=call.data)
+        new_keyboard = keyboards.check_keyboard(keyboard, call=call.data)
         await call.message.edit_text(text=call.message.text, reply_markup=new_keyboard)
     await call.answer()
 
@@ -108,7 +112,8 @@ async def complete_registration(message: types.Message, state: FSMContext):
     await queries.insert_groups_user(telegram_id=message.chat.id,
                                      groups=data['groups'])
     await core.handlers.basic.send_profile(message)
-    await message.answer('Регистрация успешно завершена')
+    await message.answer('Регистрация успешно завершена',
+                         reply_markup=keyboards.get_kb_main_menu())
     await state.finish()
 
 

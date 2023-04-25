@@ -3,7 +3,7 @@ import locale
 import re
 import datetime as dt
 from datetime import datetime
-
+import sqlalchemy
 from aiogram import types, Dispatcher
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
@@ -12,7 +12,7 @@ from aiogram.dispatcher.filters import Text
 import core.handlers.basic
 from core.filters import StateClassFilter
 from core.keyboards import *
-
+from core.create_connect import bot
 from db.queries import queries
 from db.models import User
 
@@ -47,29 +47,26 @@ async def send_my_reminder(message: types.Message):
         await message.answer('У вас нет активных напоминаний')
 
 
-def get_str_users_reminder(users: list[(str, bool)]) -> str:
-    users_no_done = 'Выполняют⏳:\n'
-    users_done = 'Выполнили✅:\n'
-    for user in users:
-        if user[1] is True:
-            users_done += user[0] + ' '
-        else:
-            users_no_done += user[0] + ' '
-    text = f'{users_no_done}\n' \
-           f'-------\n' \
-           f'{users_done}'
-    return text
-
-
 async def done_reminder(call: types.CallbackQuery):
     rem_id = int(re.findall(r'\d+', call.data)[0])
     user = await queries.select_user(telegram_id=call.message.chat.id)
-    await queries.update_reminder_done(rem_id=rem_id, user_id=user.id)
-    now = dt.datetime.now()
-    time = now.strftime("%d.%m.%y %H:%M:%S")
-    text = call.message.text.replace('🟥', '🟩') + f'\nНапоминание выполнено от: {time}'
-    await call.message.edit_text(text)
-    await call.answer(f'Напоминание №{rem_id} выполнено')
+    try:
+        await queries.update_reminder_done(rem_id=rem_id, user_id=user.id)
+        # await queries.check_reminder_on_all_done(reminder_id=rem_id)
+        now = dt.datetime.now()
+        time = now.strftime("%d.%m.%y %H:%M:%S")
+        text = call.message.text.replace('🟥', '🟩') + f'\nНапоминание выполнено от: {time}'
+        await call.message.edit_text(text)
+        await call.answer(f'Напоминание №{rem_id} выполнено')
+        await send_creator_user_done_reminder(rem_id)
+    except sqlalchemy.exc.NoResultFound:
+        await call.message.edit_text(f'Напоминание №{rem_id} было удаленно❌')
+
+
+async def send_creator_user_done_reminder(rem_id):
+    user = await queries.select_creator_reminder(reminder_id=rem_id)
+    await bot.send_message(chat_id=user.telegram_id,
+                           text=f"Пользователь {user.shortname} выполнил напоминание №{rem_id}")
 
 
 async def delete_reminder(call: types.CallbackQuery):
@@ -80,6 +77,21 @@ async def delete_reminder(call: types.CallbackQuery):
         pass
     await call.answer(text='Напоминание удалено')
     await call.message.delete()
+
+
+async def send_reminder_scheduler():
+    today = datetime.today()
+    date = datetime.date(today)
+    time = datetime.time(today).replace(second=0, microsecond=0)
+    day_week = today.weekday()
+    reminders = await queries.select_reminder_for_send(date=date, time=time, day_week=day_week)
+    for rem in reminders:
+        users = await queries.select_user_on_reminder(reminder_id=rem.id)
+        msg_text = get_msg_text(rem)
+        kb = types.InlineKeyboardMarkup().insert(
+            InlineKeyboardButton('Выполнить', callback_data=f'rem_done_{rem.id}'))
+        for user in users:
+            await bot.send_message(chat_id=user.telegram_id, text=f'🟥🟥🟥🟥🟥🟥\n{msg_text}', reply_markup=kb)
 
 
 def register_handler(dp: Dispatcher):
@@ -108,3 +120,17 @@ def get_msg_text(rem: db.models.Reminder) -> str:
                f'Дни недели: {days_week}\n' \
                f'Дата удаления: {date_delete}\n'
     return msg_text
+
+
+def get_str_users_reminder(users: list[(str, bool)]) -> str:
+    users_no_done = '\nВыполняют⏳:\n'
+    users_done = 'Выполнили✅:\n'
+    for user in users:
+        if user[1] is True:
+            users_done += user[0] + ' '
+        else:
+            users_no_done += user[0] + ' '
+    text = f'{users_no_done}\n' \
+           f'-------\n' \
+           f'{users_done}'
+    return text

@@ -11,7 +11,6 @@ async def connect_to_db(database, password, user):
         await asyncpg.connect(user=user, database=database, password=password)
         print('Database connect')
     except asyncpg.exceptions.ConnectionDoesNotExistError:
-
         sys_conn = await asyncpg.connect(user=user, password=password)
         await sys_conn.execute(f'CREATE DATABASE "{database}" OWNER "{user}"')
         await sys_conn.close()

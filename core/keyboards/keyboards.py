@@ -1,7 +1,7 @@
 import calendar
 import locale
 import re
-
+import datetime as dt
 from datetime import datetime
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, \
@@ -189,6 +189,25 @@ def get_kb_day_delete(year=int(datetime.now().year),
                 continue
             inline_kb.insert(
                 InlineKeyboardButton(str(day), callback_data=f'day_del_done_{year}_{month}_{day}'))
+    return inline_kb
+
+
+def get_clock(hour: int, minute: int) -> InlineKeyboardMarkup:
+    this_time = dt.time(hour=hour, minute=minute)
+    str_hour = this_time.strftime('%H')
+    str_minute = this_time.strftime('%M')
+    inline_kb = InlineKeyboardMarkup(row_width=4)
+    inline_kb.add(InlineKeyboardButton("⏫", callback_data=f'clock_H_*+_{hour}_{minute}'),
+                  InlineKeyboardButton("🔼", callback_data=f'clock_H_+_{hour}_{minute}'),
+                  InlineKeyboardButton("⏫", callback_data=f'clock_M_*+_{hour}_{minute}'),
+                  InlineKeyboardButton("🔼", callback_data=f'clock_M_+_{hour}_{minute}'),)
+    inline_kb.add(InlineKeyboardButton(f"{str_hour}", callback_data=f'ignore'),
+                  InlineKeyboardButton(f"{str_minute}", callback_data=f'ignore'))
+    inline_kb.add(InlineKeyboardButton("⏬", callback_data=f'clock_H_*-_{hour}_{minute}'),
+                  InlineKeyboardButton("🔽", callback_data=f'clock_H_-_{hour}_{minute}'),
+                  InlineKeyboardButton("⏬", callback_data=f'clock_M_*-_{hour}_{minute}'),
+                  InlineKeyboardButton("🔽", callback_data=f'clock_M_-_{hour}_{minute}'))
+    inline_kb.insert(InlineKeyboardButton("Готово", callback_data=f'time_done_{hour}_{minute}'))
     return inline_kb
 
 

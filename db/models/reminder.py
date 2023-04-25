@@ -15,6 +15,7 @@ class Reminder(BaseModel):
     dates = Column(postgresql.ARRAY(Date))
     days_week = Column(postgresql.ARRAY(Integer),
                        comment='Save the day of the week as an integer, where Monday is 0 and Sunday is 6')
+    # delete_all_user_done = Column(TIMESTAMP)
     reminder_user = relationship(ReminderUser, cascade='all')
 
     def __init__(self, creator_id, text, date_delete, times, dates, days_week):

@@ -1,5 +1,6 @@
 import re
 import datetime
+from dateutil.relativedelta import relativedelta
 
 from aiogram import types, Dispatcher
 from aiogram.dispatcher.filters import Text
@@ -87,7 +88,7 @@ async def get_dates_send(call: types.CallbackQuery, state: FSMContext):
 
 
 async def msg_get_days_week(message: types.Message):
-    kb = keyboards.get_kb_days_week()
+    kb = keyboards.get_inline_kb_days_week()
     await message.answer('Выберите дни недели: ', reply_markup=kb)
     await ReminderState.days_week.set()
 
@@ -100,20 +101,21 @@ async def get_days_week(call: types.CallbackQuery, state: FSMContext):
         await msg_get_date_delete(call.message)
     elif 'days_week' in call.data:
         kb = call.message.reply_markup['inline_keyboard']
-        new_kb = keyboards.check_keyboard(kb, call.data)
+        new_kb = keyboards.edit_inline_kb(kb, call.data)
         await call.message.edit_text(call.message.text, reply_markup=new_kb)
     await call.answer()
 
 
 async def msg_get_date_delete(message: types.Message):
+    kb = keyboards.get_kb_calendar()
     await message.answer('Выберите дату удаления напоминания: ',
-                         reply_markup=keyboards.get_kb_calendar())
+                         reply_markup=kb)
     await ReminderState.date_delete.set()
 
 
 async def get_date_delete(call: types.CallbackQuery, state: FSMContext):
     if 'cal_day' in call.data:
-        date_str = ".".join(re.findall(r'\d+', call.data))
+        date_str = '.'.join(re.findall(r'\d+', call.data))
         date = datetime.datetime.strptime(date_str, '%d.%m.%Y')
         await state.update_data(date_delete=date)
     else:
@@ -123,26 +125,26 @@ async def get_date_delete(call: types.CallbackQuery, state: FSMContext):
 
 
 async def msg_get_users(message: types.Message):
-    kb = keyboards.get_kb_users(await queries.select_user_all())
+    kb = keyboards.get_inline_kb_users(await queries.select_users_all())
     await message.answer(f'Выберите пользователей: ', reply_markup=kb)
     await ReminderState.users.set()
 
 
 async def get_users(call: types.CallbackQuery, state: FSMContext):
-    if 'user_ID' in call.data:
-        kb = keyboards.check_keyboard(keyboard=call.message.reply_markup['inline_keyboard'],
-                                      call=call.data)
-        await call.message.edit_text(text=call.message.text, reply_markup=kb)
-    elif call.data == 'user_done':
+    if call.data == 'user_done':
         users = keyboards.get_data_on_keyboards(
-            keyboard=call.message.reply_markup['inline_keyboard'])
+            inline_kb=call.message.reply_markup['inline_keyboard'])
         await state.update_data(users=users)
         await msg_get_groups(call.message)
+    else:
+        kb = keyboards.edit_inline_kb(inline_kb=call.message.reply_markup['inline_keyboard'],
+                                      call=call.data)
+        await call.message.edit_text(text=call.message.text, reply_markup=kb)
     await call.answer()
 
 
 async def msg_get_groups(message: types.Message):
-    kb = keyboards.get_kb_inline_groups(await queries.select_all_groups())
+    kb = keyboards.get_inline_kb_groups(await queries.select_groups_all())
     await message.answer(text='Выберите группы: ', reply_markup=kb)
     await ReminderState.groups.set()
 
@@ -150,11 +152,11 @@ async def msg_get_groups(message: types.Message):
 async def get_groups(call: types.CallbackQuery, state: FSMContext):
     if call.data == 'group_done':
         groups = keyboards.get_data_on_keyboards(
-            keyboard=call.message.reply_markup['inline_keyboard'])
+            inline_kb=call.message.reply_markup['inline_keyboard'])
         await state.update_data(groups=groups)
         await end_rem(call.message, state)
     elif 'group' in call.data:
-        kb = keyboards.check_keyboard(keyboard=call.message.reply_markup['inline_keyboard'],
+        kb = keyboards.edit_inline_kb(inline_kb=call.message.reply_markup['inline_keyboard'],
                                       call=call.data)
         await call.message.edit_text(text=call.message.text, reply_markup=kb)
 
@@ -208,9 +210,18 @@ def register_handler(dp: Dispatcher):
     dp.register_callback_query_handler(get_groups, Text(startswith='group'), state=ReminderState.groups)
 
 
-def check_time(message_text) -> list[datetime.time]:
+def check_time(text: str) -> list[datetime.time]:
+    """
+    Проверяет время, на правильность ввода. Принимает тест сообщения, и разбивает его по пробелам
+    после проверяет каждый элемент списка:
+    1230 - добавит в результирующий список
+    1278 - ошибка => вернет пустой список
+    :param text: Тест сообщения от пользователя должен содержать время в формате (%H%M),
+    несколько через пробел, пример: '1010 1630'
+    :return: Возвращает список объектов datetime.time
+    """
     result = []
-    list_str = message_text.split()
+    list_str = text.split()
     for temp in list_str:
         try:
             time = datetime.datetime.strptime(f'{temp}', '%H%M').time()
@@ -253,27 +264,29 @@ def get_timedelta(callback) -> datetime.timedelta:
     return delta
 
 
-async def cal_edit(call: types.CallbackQuery):
+async def cal_edit(call: types.CallbackQuery) -> None:
+    """
+    Редактирует сообщение с выбором даты, меняет месяцы.
+    :param call: Содержит информацию о месяце и годе в виде 'cal_month_next_{month}_{year}'
+    :return:
+    """
     date = [int(num) for num in re.findall(r'\d+', call.data)]
+    date = datetime.date(year=date[1], month=date[0], day=1)
     if 'cal_month_next' in call.data:
-        if date[0] == 12:
-            year = date[1] + 1
-            month = 1
-        else:
-            year = date[1]
-            month = date[0] + 1
+        date = date + relativedelta(months=1)
     else:
-        if date[0] == 1:
-            year = date[1] - 1
-            month = 12
-        else:
-            year = date[1]
-            month = date[0] - 1
-    inline_kb = keyboards.get_kb_calendar(year=year, month=month)
+        date = date - relativedelta(month=-1)
+    inline_kb = keyboards.get_kb_calendar(year=date.year, month=date.month)
     await call.message.edit_text(call.message.text, reply_markup=inline_kb)
 
 
 def edit_text_msg_dates_send(text: str, call: str) -> str:
+    """
+    Редактирует тест сообщения, добавляет новую дату или удаляет уже имеющеюся
+    :param text: Текст сообщения с выбором месяца
+    :param call: сallback вида 'cal_day_{day}_{month}_{year}'
+    :return: Возвращает обновленный текст сообщения
+    """
     date = ".".join(re.findall(r'\d+', call))
     if date in text:
         text = text.replace(f'{date}', '')
@@ -284,7 +297,7 @@ def edit_text_msg_dates_send(text: str, call: str) -> str:
 
 async def get_set_users(users_id: list[int], groups_id: list[int]) -> set:
     users_list = set()
-    users_groups = (await queries.select_groups_users(groups_id=groups_id))
+    users_groups = (await queries.select_users_on_groups(groups_id=groups_id))
     for user in users_groups:
         users_list.add(user.id)
     for user in users_id:

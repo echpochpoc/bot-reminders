@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey, Time, Date, TIMESTAMP, String
+from sqlalchemy import Column, Integer, ForeignKey, Time, Date, TIMESTAMP, String, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects import postgresql
 from .base import BaseModel
@@ -15,7 +15,7 @@ class Reminder(BaseModel):
     dates = Column(postgresql.ARRAY(Date))
     days_week = Column(postgresql.ARRAY(Integer),
                        comment='Save the day of the week as an integer, where Monday is 0 and Sunday is 6')
-    # delete_all_user_done = Column(TIMESTAMP)
+    status = Column(Boolean, default=False)
     reminder_user = relationship(ReminderUser, cascade='all')
 
     def __init__(self, creator_id, text, date_delete, times, dates, days_week):

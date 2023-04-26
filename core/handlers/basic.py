@@ -29,7 +29,7 @@ async def cancel_handler(message: types.Message, state: FSMContext):
 
 async def send_profile(message: types.Message):
     user: User = await queries.select_user(message.chat.id)
-    group = await queries.select_groups_for_user(message.chat.id)
+    group = await queries.select_groups_with_user(message.chat.id)
     text = f'Ваш профиль:\n' \
            f'ID: {user.telegram_id}\n' \
            f'ФИО: {user.fullname}\n' \

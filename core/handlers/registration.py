@@ -24,10 +24,6 @@ async def registration_start(message: types.Message) -> None:
     await msg_get_fullname(message)
 
 
-async def registration_cancel(message: types.Message) -> None:
-    pass
-
-
 async def msg_get_fullname(message: types.Message):
     kb = keyboards.get_kb_back()
     await message.answer('Введите ФИО или просто фамилию имя',
@@ -60,7 +56,7 @@ async def get_shortname(message: types.Message, state: FSMContext):
 
 
 async def msg_get_photo(message: types.Message):
-    kb = keyboards.get_inline_skip()
+    kb = keyboards.get_inline_kb_skip()
     await message.answer('Отправьте фото', reply_markup=kb)
     await RegistrationState.photo.set()
 
@@ -80,7 +76,7 @@ async def skip_photo(call: types.CallbackQuery, state: FSMContext):
 
 
 async def msg_get_groups(message: types.Message):
-    kb = keyboards.get_kb_inline_groups(await queries.select_all_groups())
+    kb = keyboards.get_inline_kb_groups(await queries.select_groups_all())
     await message.answer('Выберите группы: ', reply_markup=kb)
     await RegistrationState.groups.set()
 
@@ -88,12 +84,12 @@ async def msg_get_groups(message: types.Message):
 async def get_groups(call: types.CallbackQuery, state: FSMContext):
     if call.data == 'group_done':
         keyboard = call.message.reply_markup['inline_keyboard']
-        groups = keyboards.get_text_on_buttons_kb(keyboard)
+        groups = keyboards.get_text_on_buttons(keyboard)
         await state.update_data(groups=groups)
         await complete_registration(call.message, state)
     else:
         keyboard = call.message.reply_markup['inline_keyboard']
-        new_keyboard = keyboards.check_keyboard(keyboard, call=call.data)
+        new_keyboard = keyboards.edit_inline_kb(keyboard, call=call.data)
         await call.message.edit_text(text=call.message.text, reply_markup=new_keyboard)
     await call.answer()
 
@@ -109,11 +105,12 @@ async def complete_registration(message: types.Message, state: FSMContext):
         telegram_name=f'{message.chat.last_name} {message.chat.first_name}'.strip(),
     )
     await queries.insert_user(user)
-    await queries.insert_groups_user(telegram_id=message.chat.id,
-                                     groups=data['groups'])
+    await queries.insert_groups_users(telegram_id=message.chat.id,
+                                      titles_groups=data['groups'])
     await core.handlers.basic.send_profile(message)
+    kb = keyboards.get_kb_main_menu()
     await message.answer('Регистрация успешно завершена',
-                         reply_markup=keyboards.get_kb_main_menu())
+                         reply_markup=kb)
     await state.finish()
 
 

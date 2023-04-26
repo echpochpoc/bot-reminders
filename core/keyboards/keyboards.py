@@ -1,22 +1,35 @@
 import calendar
 import locale
 import re
-import datetime as dt
-from datetime import datetime
+import datetime
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, \
-    ReplyKeyboardMarkup, KeyboardButton
-
-import db.models
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, \
+                          ReplyKeyboardMarkup, KeyboardButton
+from db import models
 
 
 def get_kb_back() -> ReplyKeyboardMarkup:
-    kb = ReplyKeyboardMarkup(resize_keyboard=True).insert(
-        KeyboardButton('⬅️Назад'))
+    """
+    Возвращает клавиатуру с кнопкой назад
+    :return:
+    """
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)\
+        .insert(KeyboardButton('⬅️Назад'))
+    return kb
+
+
+def get_kb_yes_no() -> ReplyKeyboardMarkup:
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)\
+        .add(KeyboardButton(text='🚫 Нет'),
+             KeyboardButton(text='✅ Да'))
     return kb
 
 
 def get_kb_main_menu() -> ReplyKeyboardMarkup:
+    """
+    Возвращает клавиатуру главного меню
+    :return:
+    """
     kb = ReplyKeyboardMarkup(resize_keyboard=True).add(
         KeyboardButton('🖊Создать напоминание'),
         KeyboardButton('📬Напоминания вам'),
@@ -27,125 +40,92 @@ def get_kb_main_menu() -> ReplyKeyboardMarkup:
     return kb
 
 
-def get_inline_skip() -> InlineKeyboardMarkup:
+def get_inline_kb_skip() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup().insert(
         InlineKeyboardButton(text='Пропустить',
                              callback_data='skip'))
     return kb
 
 
-def get_kb_back_cancel():
-    buttons = [
-        [
-            KeyboardButton(text='⬅️Назад'),
-            KeyboardButton(text='🚫Отмена')
-        ],
-    ]
-    keyboard = ReplyKeyboardMarkup(keyboard=buttons,
-                                   resize_keyboard=True, )
-    return keyboard
-
-
-def get_kb_back_done():
-    buttons = [
-        [
-            KeyboardButton(text='⬅️ Назад'),
-            KeyboardButton(text='✅ Готово')
-        ],
-    ]
-    keyboard = ReplyKeyboardMarkup(keyboard=buttons,
-                                   resize_keyboard=True, )
-    return keyboard
-
-
-def get_kb_back_skip_cancel():
-    buttons = [
-        [
-            KeyboardButton(text='⬅️ Назад'),
-            KeyboardButton(text='⏭️ Пропустить'),
-            KeyboardButton(text='🚫 Отмена')
-        ],
-    ]
-    keyboard = ReplyKeyboardMarkup(keyboard=buttons,
-                                   resize_keyboard=True, )
-    return keyboard
-
-
-def get_kb_yes_no():
-    buttons = [
-        [
-            KeyboardButton(text='🚫 Нет'),
-            KeyboardButton(text='✅ Да')
-        ],
-    ]
-    keyboard = ReplyKeyboardMarkup(keyboard=buttons,
-                                   resize_keyboard=True)
-    return keyboard
-
-
-def check_keyboard(keyboard: InlineKeyboardButton, call: str) -> InlineKeyboardMarkup:
-    # Проверяем кнопки на отметку, если ее нет и callback_data совпадают добавляем и не наоборот
+def edit_inline_kb(inline_kb: InlineKeyboardMarkup, call: str) -> InlineKeyboardMarkup:
+    """
+    Проверяем кнопки на отметку '✅', если её нет - добавляет, если есть - убирает
+    :param inline_kb:
+    :param call:
+    :return: Возвращает пересозданную клавиатуру с измененной кнопкой
+    """
     new_keyboard = InlineKeyboardMarkup()
-    # Обратите внимание, что полученная клавиатура, это матрица и перебирает ее надо через 2 цикла
-    # Но это не всегда так может прилететь и просто список, если кнопки расположены в один ряд
-    for row in keyboard:
+    for row in inline_kb:
+        new_row = []
         for button in row:
-            if '✅' not in button['text'] and button['callback_data'] == call:
-                button['text'] = '✅' + button['text']
+            button: dict
+            if '✅' not in button["text"] and button["callback_data"] == call:
+                button['text'] = f'✅{button["text"]}'
             elif '✅' in button['text'] and button['callback_data'] == call:
                 button['text'] = button['text'].replace('✅', '')
-        new_keyboard.add(*row)
+            new_row.append(button)
+        new_keyboard.row(*new_row)
     return new_keyboard
 
 
-def get_text_on_buttons_kb(keyboard: InlineKeyboardMarkup) -> list[str]:
-    '''
-    Проверяет кнопки с галочкой и возвращает текст с кнопок
-    :param keyboard:
+def get_text_on_buttons(inline_kb: InlineKeyboardMarkup) -> list[str]:
+    """
+    Формирует список с текстом кнопок, на который был знак '✅'
+    :param inline_kb:
     :return:
-    '''
-
-    # Проверяем кнопки, на нажатие и формируем список должностей
+    """
     result = []
-    for row in keyboard:
+    for row in inline_kb:
         for button in row:
+            button: dict
             if '✅' in button['text']:
                 result.append(button['text'].replace('✅', ''))
     return result
 
 
-def get_data_on_keyboards(keyboard):
-    # Проверяем кнопки, на нажатие и формируем список должностей
-    post_list = []
-    for row in keyboard:
+def get_data_on_keyboards(inline_kb: InlineKeyboardMarkup) -> list[int]:
+    """
+    Формирует список с числами(id из базы данных) из callback_data, на который был знак '✅'
+    :param inline_kb:
+    :return:
+    """
+    result = []
+    for row in inline_kb:
         for button in row:
+            button: dict
             if '✅' in button['text']:
-                value = int(re.findall('\d+', button['callback_data'])[0])
-                post_list.append(value)
-    return post_list
+                value = int(re.findall(r'\d+', button['callback_data'])[0])
+                result.append(value)
+    return result
 
 
-def get_kb_inline_groups(list_value):
-    buttons = []
-    n = 0
-    for i in list_value:
-        buttons.append(InlineKeyboardButton(text=i.title, callback_data=f'group_{i.id}'))
-        n += 1
-    keyboard = InlineKeyboardMarkup(row_width=3)
-    keyboard.add(*buttons)
-    keyboard.add(InlineKeyboardButton(text='Готово', callback_data=f'group_done'))
-
+def get_inline_kb_groups(groups: list[models.Group]) -> InlineKeyboardMarkup:
+    """
+    Создает inline клавиатуру, для выбора групп
+    :param groups:
+    :return:
+    """
+    keyboard = InlineKeyboardMarkup()
+    for group in groups:
+        keyboard.insert(InlineKeyboardButton(text=group.title, callback_data=f'group_{group.id}'))
+    keyboard.row(InlineKeyboardButton(text='Готово', callback_data=f'group_done'))
     return keyboard
 
 
-def get_kb_calendar(year=int(datetime.now().year),
-                    month=int(datetime.now().month)) -> InlineKeyboardMarkup:
+def get_kb_calendar(year=int(datetime.datetime.now().year),
+                    month=int(datetime.datetime.now().month)) -> InlineKeyboardMarkup:
+    """
+    Создает интерактивный календарь с возможностью листать месяцы
+    :param year:
+    :param month:
+    :return:
+    """
     locale.setlocale(locale.LC_ALL, 'ru_RU.UTF-8')
     month_list = list(calendar.month_abbr)
-    inline_kb = InlineKeyboardMarkup(row_width=7).row()
-    inline_kb.insert(InlineKeyboardButton("<<", callback_data=f'cal_month_prev_{month}_{year}'))
-    inline_kb.insert(InlineKeyboardButton(f'{month_list[month]} {year}', callback_data='ignore'))
-    inline_kb.insert(InlineKeyboardButton(">>", callback_data=f'cal_month_next_{month}_{year}'))
+    inline_kb = InlineKeyboardMarkup(row_width=7)
+    inline_kb.row(InlineKeyboardButton("<<", callback_data=f'cal_month_prev_{month}_{year}'),
+                  InlineKeyboardButton(f'{month_list[month]} {year}', callback_data='ignore'),
+                  InlineKeyboardButton(">>", callback_data=f'cal_month_next_{month}_{year}'))
     month_calendar = calendar.monthcalendar(year, month)
     for week in month_calendar:
         inline_kb.row()
@@ -160,40 +140,29 @@ def get_kb_calendar(year=int(datetime.now().year),
     return inline_kb
 
 
-def get_kb_days_week():
+def get_inline_kb_days_week() -> InlineKeyboardMarkup:
+    """
+    Создает клавиатуру для выбора дня недели, где 0 - понедельник, 6 - воскресенье
+    :return:
+    """
     locale.setlocale(locale.LC_ALL, 'ru_RU.UTF-8')
-    inline_kb = InlineKeyboardMarkup(row_width=3).row()
+    inline_kb = InlineKeyboardMarkup()
     i = 0
     for day in calendar.day_abbr:
-        inline_kb.insert(InlineKeyboardButton(day, callback_data=f'days_week_{i}'))
+        inline_kb.insert(InlineKeyboardButton(text=day, callback_data=f'days_week_{i}'))
         i += 1
     inline_kb.insert(InlineKeyboardButton('Готово', callback_data=f'days_week_done'))
     return inline_kb
 
 
-def get_kb_day_delete(year=int(datetime.now().year),
-                      month=int(datetime.now().month)) -> InlineKeyboardMarkup:
-    locale.setlocale(locale.LC_ALL, 'ru_RU.UTF-8')
-    month_list = list(calendar.month_abbr)
-    inline_kb = InlineKeyboardMarkup(row_width=7).row()
-    inline_kb.insert(InlineKeyboardButton("<<", callback_data=f'day_del_prev_month_{year}_{month}'))
-    inline_kb.insert(InlineKeyboardButton(f'{month_list[month]} {year}', callback_data='ignore'))
-    inline_kb.insert(InlineKeyboardButton(">>", callback_data=f'day_del_next_month_{year}_{month}'))
-    month_calendar = calendar.monthcalendar(year, month)
-    for week in month_calendar:
-        inline_kb.row()
-        for day in week:
-            if day == 0:
-                inline_kb.insert(
-                    InlineKeyboardButton(" ", callback_data='ignore'))
-                continue
-            inline_kb.insert(
-                InlineKeyboardButton(str(day), callback_data=f'day_del_done_{year}_{month}_{day}'))
-    return inline_kb
-
-
 def get_clock(hour: int, minute: int) -> InlineKeyboardMarkup:
-    this_time = dt.time(hour=hour, minute=minute)
+    """
+    Возвращает inline клавиатуру для выбора времени
+    :param hour:
+    :param minute:
+    :return:
+    """
+    this_time = datetime.time(hour=hour, minute=minute)
     str_hour = this_time.strftime('%H')
     str_minute = this_time.strftime('%M')
     inline_kb = InlineKeyboardMarkup(row_width=4)
@@ -211,10 +180,14 @@ def get_clock(hour: int, minute: int) -> InlineKeyboardMarkup:
     return inline_kb
 
 
-def get_kb_users(list_user: list) -> InlineKeyboardMarkup:
-    inline_kb = InlineKeyboardMarkup(row_width=3).row()
-    for i in list_user:
-        i: db.models.User
-        inline_kb.insert(InlineKeyboardButton(text=i.shortname, callback_data=f'user_ID_{i.id}'))
-    inline_kb.row().insert(InlineKeyboardButton("Готово", callback_data=f'user_done'))
+def get_inline_kb_users(users: list[models.User]) -> InlineKeyboardMarkup:
+    """
+    Возвращает клавиатуру, для выбора пользователей
+    :param users:
+    :return:
+    """
+    inline_kb = InlineKeyboardMarkup()
+    for user in users:
+        inline_kb.insert(InlineKeyboardButton(text=user.shortname, callback_data=f'user_{user.id}'))
+    inline_kb.row(InlineKeyboardButton("Готово", callback_data=f'user_done'))
     return inline_kb

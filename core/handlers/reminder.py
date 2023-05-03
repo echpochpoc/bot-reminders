@@ -7,7 +7,8 @@ from aiogram.dispatcher.filters import Text
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
 
-from core.filters.filters import StateClassFilter
+from core.create_connect import bot
+from core.filters.filters import StateClassFilter, UserIsRegistered
 from core.keyboards import keyboards
 from db.queries import queries
 from db.models import Reminder
@@ -75,11 +76,14 @@ async def get_dates_send(call: types.CallbackQuery, state: FSMContext):
     if 'cal_day' in call.data:
         text = edit_text_msg_dates_send(text=call.message.text,
                                         call=call.data)
-        await call.message.edit_text(text, reply_markup=call.message.reply_markup)
+        try:
+            await call.message.edit_text(text, reply_markup=call.message.reply_markup)
+        except:
+            pass
     elif call.data == 'cal_done':
         dates = []
-        dates_str = call.message.text.replace('Даты выбраны:', '').split(' ')
-        if not (dates_str[0] == ''):
+        dates_str = call.message.text.replace('Даты выбраны: ', '').split(' ')
+        if not (dates_str[0] == 'Даты'):
             for date_str in dates_str:
                 dates.append(datetime.datetime.strptime(date_str, '%d.%m.%Y'))
         await state.update_data(dates_send=dates)
@@ -98,11 +102,18 @@ async def get_days_week(call: types.CallbackQuery, state: FSMContext):
         kb = call.message.reply_markup['inline_keyboard']
         days = keyboards.get_data_on_keyboards(kb)
         await state.update_data(days_week=days)
+        async with state.proxy() as data:
+            if not data['dates_send'] and not data['days_week']:
+                await call.answer('Выберите хотя бы один день отправки')
+                return
         await msg_get_date_delete(call.message)
     elif 'days_week' in call.data:
         kb = call.message.reply_markup['inline_keyboard']
         new_kb = keyboards.edit_inline_kb(kb, call.data)
-        await call.message.edit_text(call.message.text, reply_markup=new_kb)
+        try:
+            await call.message.edit_text(call.message.text, reply_markup=new_kb)
+        except:
+            pass
     await call.answer()
 
 
@@ -117,6 +128,9 @@ async def get_date_delete(call: types.CallbackQuery, state: FSMContext):
     if 'cal_day' in call.data:
         date_str = '.'.join(re.findall(r'\d+', call.data))
         date = datetime.datetime.strptime(date_str, '%d.%m.%Y')
+        if datetime.datetime.now() > date:
+            await call.answer('Выберите дату позже чем сегодня')
+            return
         await state.update_data(date_delete=date)
     else:
         await state.update_data(date_delete=None)
@@ -139,7 +153,10 @@ async def get_users(call: types.CallbackQuery, state: FSMContext):
     else:
         kb = keyboards.edit_inline_kb(inline_kb=call.message.reply_markup['inline_keyboard'],
                                       call=call.data)
-        await call.message.edit_text(text=call.message.text, reply_markup=kb)
+        try:
+            await call.message.edit_text(text=call.message.text, reply_markup=kb)
+        except:
+            pass
     await call.answer()
 
 
@@ -154,7 +171,12 @@ async def get_groups(call: types.CallbackQuery, state: FSMContext):
         groups = keyboards.get_data_on_keyboards(
             inline_kb=call.message.reply_markup['inline_keyboard'])
         await state.update_data(groups=groups)
+        async with state.proxy() as data:
+            if not data['users'] and not data['groups']:
+                await call.answer('Выберите хотя бы одного пользователя или группу')
+                return
         await end_rem(call.message, state)
+        await call.answer()
     elif 'group' in call.data:
         kb = keyboards.edit_inline_kb(inline_kb=call.message.reply_markup['inline_keyboard'],
                                       call=call.data)
@@ -162,6 +184,9 @@ async def get_groups(call: types.CallbackQuery, state: FSMContext):
 
 
 async def end_rem(message: types.Message, state: FSMContext):
+    """
+    Добавляет напоминание в базу данных и вызывает метод рассылки сообщения пользователям о новом напоминании
+    """
     async with state.proxy() as data:
         creator = await queries.select_user(telegram_id=message.chat.id)
         reminder = Reminder(
@@ -170,10 +195,21 @@ async def end_rem(message: types.Message, state: FSMContext):
             days_week=data['days_week'], dates=data['dates_send'],
         )
         users = await get_set_users(data['users'], data['groups'])
-    await queries.insert_reminder(reminder, users)
     await message.answer('Напоминание создано',
                          reply_markup=keyboards.get_kb_main_menu())
+    reminder = await queries.insert_reminder(reminder, users)
+    await message_users(reminder=reminder)
     await state.finish()
+
+
+async def message_users(reminder: Reminder):
+    users = await queries.select_users_on_reminder(reminder_id=reminder.id)
+    creator = await queries.select_creator(reminder_id=reminder.id)
+    for user in users:
+        kb = keyboards.get_inline_kb_reminder_details(reminder_id=reminder.id)
+        await bot.send_message(chat_id=user.telegram_id,
+                               text=f'{creator.shortname} создал напоминание для вас:\n{reminder.text}',
+                               reply_markup=kb)
 
 
 async def go_back(message: types.message, state: FSMContext):
@@ -193,8 +229,8 @@ async def go_back(message: types.message, state: FSMContext):
 
 
 def register_handler(dp: Dispatcher):
-    dp.register_message_handler(reminder_start, commands=['reminder'])
-    dp.register_message_handler(reminder_start, Text(equals='🖊Создать напоминание'))
+    dp.register_message_handler(reminder_start, UserIsRegistered(), commands=['reminder'])
+    dp.register_message_handler(reminder_start, UserIsRegistered(), Text(equals='🖊Создать напоминание'))
     dp.register_callback_query_handler(clock_edit, Text(startswith='clock'), state=ReminderState.times)
     dp.register_callback_query_handler(cal_edit, Text(startswith='cal_month'), state='*')
     dp.register_message_handler(go_back, StateClassFilter(state_class='ReminderState'),
@@ -232,12 +268,18 @@ def check_time(text: str) -> list[datetime.time]:
 
 
 async def clock_edit(call: types.CallbackQuery):
+    """
+    Меняет время на часах
+    """
     hour, minute = map(int, re.findall(r'\d+', call.data))
     time = datetime.time(hour, minute)
     delta = get_timedelta(callback=call.data)
     time = (datetime.datetime.combine(datetime.date.today(), time) + delta).time()
     kb = keyboards.get_clock(hour=time.hour, minute=time.minute)
-    await call.message.edit_text(call.message.text, reply_markup=kb)
+    try:
+        await call.message.edit_text(call.message.text, reply_markup=kb)
+    except:
+        pass
 
 
 def get_timedelta(callback) -> datetime.timedelta:
@@ -283,9 +325,6 @@ async def cal_edit(call: types.CallbackQuery) -> None:
 def edit_text_msg_dates_send(text: str, call: str) -> str:
     """
     Редактирует тест сообщения, добавляет новую дату или удаляет уже имеющеюся
-    :param text: Текст сообщения с выбором месяца
-    :param call: сallback вида 'cal_day_{day}_{month}_{year}'
-    :return: Возвращает обновленный текст сообщения
     """
     date = ".".join(re.findall(r'\d+', call))
     if date in text:

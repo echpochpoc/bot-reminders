@@ -25,6 +25,10 @@ async def set_commands(bot: Bot):
             description='Добавить группу'
         ),
         BotCommand(
+            command='delete_group',
+            description='Удалить группы'
+        ),
+        BotCommand(
             command='keyboard',
             description='Создать клавиатуру'
         ),

@@ -6,7 +6,7 @@ class ReminderUser(BaseModel):
     __tablename__ = 'reminders_users'
 
     user_id = Column(Integer, ForeignKey('users.id'))
-    reminder_id = Column(Integer, ForeignKey('reminders.id'))
+    reminder_id = Column(Integer, ForeignKey('reminders.id', ondelete='CASCADE'))
     status = Column(Boolean, default=False)
 
     def __init__(self, user_id, reminder_id):

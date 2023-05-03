@@ -1,6 +1,9 @@
 from aiogram.dispatcher.filters import BoundFilter
 from aiogram import types
+
 from core.create_connect import dp
+
+from db.queries import queries
 
 
 class StateClassFilter(BoundFilter):
@@ -14,3 +17,11 @@ class StateClassFilter(BoundFilter):
             return False
         if self.state_class in cur_state:
             return True
+
+
+class UserIsRegistered(BoundFilter):
+    async def check(self, message: types.Message) -> bool:
+        user = await queries.select_user(telegram_id=message.from_user.id)
+        if user:
+            return True
+

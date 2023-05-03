@@ -11,7 +11,6 @@ from db import models
 def get_kb_back() -> ReplyKeyboardMarkup:
     """
     Возвращает клавиатуру с кнопкой назад
-    :return:
     """
     kb = ReplyKeyboardMarkup(resize_keyboard=True)\
         .insert(KeyboardButton('⬅️Назад'))
@@ -28,7 +27,6 @@ def get_kb_yes_no() -> ReplyKeyboardMarkup:
 def get_kb_main_menu() -> ReplyKeyboardMarkup:
     """
     Возвращает клавиатуру главного меню
-    :return:
     """
     kb = ReplyKeyboardMarkup(resize_keyboard=True).add(
         KeyboardButton('🖊Создать напоминание'),
@@ -40,7 +38,34 @@ def get_kb_main_menu() -> ReplyKeyboardMarkup:
     return kb
 
 
+def get_inline_kb_reminder_done(reminder_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup()
+    kb.insert(InlineKeyboardButton(text='Выполнить',
+                                   callback_data=f'rem_done_{reminder_id}'))
+    return kb
+
+
+def get_inline_kb_reminder_delete(reminder_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup()
+    kb.insert(InlineKeyboardButton(text='Удалить',
+                                   callback_data=f'rem_delete_{reminder_id}'))
+    return kb
+
+
+def get_inline_kb_reminder_details(reminder_id: int) -> InlineKeyboardMarkup:
+    """
+    Создает кнопку "Подробнее", чтоб узнать детали напоминания
+    """
+    kb = InlineKeyboardMarkup()
+    kb.insert(InlineKeyboardButton(text='Подробнее',
+                                   callback_data=f'rem_detail_{reminder_id}'))
+    return kb
+
+
 def get_inline_kb_skip() -> InlineKeyboardMarkup:
+    """
+    Кнопка пропустить и все)
+    """
     kb = InlineKeyboardMarkup().insert(
         InlineKeyboardButton(text='Пропустить',
                              callback_data='skip'))
@@ -50,9 +75,6 @@ def get_inline_kb_skip() -> InlineKeyboardMarkup:
 def edit_inline_kb(inline_kb: InlineKeyboardMarkup, call: str) -> InlineKeyboardMarkup:
     """
     Проверяем кнопки на отметку '✅', если её нет - добавляет, если есть - убирает
-    :param inline_kb:
-    :param call:
-    :return: Возвращает пересозданную клавиатуру с измененной кнопкой
     """
     new_keyboard = InlineKeyboardMarkup()
     for row in inline_kb:
@@ -71,8 +93,6 @@ def edit_inline_kb(inline_kb: InlineKeyboardMarkup, call: str) -> InlineKeyboard
 def get_text_on_buttons(inline_kb: InlineKeyboardMarkup) -> list[str]:
     """
     Формирует список с текстом кнопок, на который был знак '✅'
-    :param inline_kb:
-    :return:
     """
     result = []
     for row in inline_kb:
@@ -86,8 +106,6 @@ def get_text_on_buttons(inline_kb: InlineKeyboardMarkup) -> list[str]:
 def get_data_on_keyboards(inline_kb: InlineKeyboardMarkup) -> list[int]:
     """
     Формирует список с числами(id из базы данных) из callback_data, на который был знак '✅'
-    :param inline_kb:
-    :return:
     """
     result = []
     for row in inline_kb:
@@ -99,11 +117,16 @@ def get_data_on_keyboards(inline_kb: InlineKeyboardMarkup) -> list[int]:
     return result
 
 
+def get_inline_kb_group_delete(group_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup()
+    kb.insert(InlineKeyboardButton(text='Удалить',
+                                   callback_data=f'delete_group_{group_id}'))
+    return kb
+
+
 def get_inline_kb_groups(groups: list[models.Group]) -> InlineKeyboardMarkup:
     """
     Создает inline клавиатуру, для выбора групп
-    :param groups:
-    :return:
     """
     keyboard = InlineKeyboardMarkup()
     for group in groups:
@@ -116,9 +139,6 @@ def get_kb_calendar(year=int(datetime.datetime.now().year),
                     month=int(datetime.datetime.now().month)) -> InlineKeyboardMarkup:
     """
     Создает интерактивный календарь с возможностью листать месяцы
-    :param year:
-    :param month:
-    :return:
     """
     locale.setlocale(locale.LC_ALL, 'ru_RU.UTF-8')
     month_list = list(calendar.month_abbr)
@@ -142,8 +162,8 @@ def get_kb_calendar(year=int(datetime.datetime.now().year),
 
 def get_inline_kb_days_week() -> InlineKeyboardMarkup:
     """
-    Создает клавиатуру для выбора дня недели, где 0 - понедельник, 6 - воскресенье
-    :return:
+    Создает клавиатуру для выбора дня недели,
+    в callback указывается номер дня где 0 - понедельник, 6 - воскресенье
     """
     locale.setlocale(locale.LC_ALL, 'ru_RU.UTF-8')
     inline_kb = InlineKeyboardMarkup()
@@ -158,9 +178,6 @@ def get_inline_kb_days_week() -> InlineKeyboardMarkup:
 def get_clock(hour: int, minute: int) -> InlineKeyboardMarkup:
     """
     Возвращает inline клавиатуру для выбора времени
-    :param hour:
-    :param minute:
-    :return:
     """
     this_time = datetime.time(hour=hour, minute=minute)
     str_hour = this_time.strftime('%H')
@@ -183,8 +200,6 @@ def get_clock(hour: int, minute: int) -> InlineKeyboardMarkup:
 def get_inline_kb_users(users: list[models.User]) -> InlineKeyboardMarkup:
     """
     Возвращает клавиатуру, для выбора пользователей
-    :param users:
-    :return:
     """
     inline_kb = InlineKeyboardMarkup()
     for user in users:

@@ -1,1 +1,1 @@
-from .filters import StateClassFilter
+from .filters import StateClassFilter, UserIsRegistered

@@ -1,5 +1,6 @@
 import datetime as dt
 
+import sqlalchemy
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy import delete, select, or_
 
@@ -66,8 +67,20 @@ async def select_user(telegram_id: int) -> User:
     async with session_factory.begin() as session:
         stmt = select(User).where(User.telegram_id == telegram_id)
         result = await session.execute(stmt)
-        user = result.scalar_one()
-        return user
+        try:
+            user = result.scalar_one()
+            return user
+        except sqlalchemy.exc.NoResultFound:
+            return None
+
+
+async def select_reminder(reminder_id: int) -> Reminder:
+    """
+    Возвращает напоминание по id
+    """
+    async with session_factory.begin() as session:
+        reminder = await session.get(Reminder, reminder_id)
+        return reminder
 
 
 async def select_users_all() -> list[User]:
@@ -86,9 +99,9 @@ async def select_reminders_for_me(telegram_id: int) -> list[Reminder]:
     Возвращает список напоминаний созданных для пользователя по telegram id
     """
     async with session_factory.begin() as session:
-        stmt = select(Reminder).join(ReminderUser, Reminder.id == ReminderUser.reminder_id) \
-            .join(User, User.id == ReminderUser.user_id) \
-            .where(User.telegram_id == telegram_id, ReminderUser.status==False)
+        stmt = select(Reminder).join(ReminderUser, ReminderUser.reminder_id == Reminder.id) \
+            .join(User, ReminderUser.user_id == User.id) \
+            .where(User.telegram_id == telegram_id, ReminderUser.status.is_(False))
         result = await session.execute(stmt)
         reminders = result.scalars().all()
         return reminders
@@ -99,7 +112,8 @@ async def select_my_reminders(telegram_id: int) -> list[Reminder]:
     Возвращает список напоминаний созданных пользователем, по telegram id
     """
     async with session_factory.begin() as session:
-        stmt = select(Reminder).join(User).where(User.telegram_id == telegram_id)
+        stmt = select(Reminder).join(User).where(User.telegram_id == telegram_id,
+                                                 Reminder.status.is_(False))
         result = await session.execute(stmt)
         reminder = result.scalars().all()
         return reminder
@@ -127,9 +141,21 @@ async def select_users_on_groups(groups_id: list) -> list[User]:
         return users
 
 
+async def select_users_on_reminder(reminder_id: int) -> list[User]:
+    """
+    Возвращает пользователей, которым создано напоминание
+    """
+    async with session_factory.begin() as session:
+        stmt = select(User).join(ReminderUser, ReminderUser.user_id == User.id)\
+            .where(ReminderUser.reminder_id == reminder_id)
+        result = await session.execute(stmt)
+        users = result.scalars().all()
+        return users
+
+
 async def insert_groups_users(telegram_id: int, titles_groups: list[str]) -> None:
     """
-    Добавляет в базу данных запись в таблицу хранящую пользователей, которые входят в группы),
+    Добавляет в базу данных запись в таблицу хранящую пользователей, которые входят в группы,
     перед добавлением удаляет все прошлые записи
     """
     async with session_factory.begin() as session:
@@ -137,12 +163,14 @@ async def insert_groups_users(telegram_id: int, titles_groups: list[str]) -> Non
         delete_stmt = delete(GroupUser).where(GroupUser.user_id == user.id)
         await session.execute(delete_stmt)
         for group_title in titles_groups:
-            group = (await session.execute(select(Group).where(Group.title == group_title))).scalar_one()
+            select_stmt = select(Group).where(Group.title == group_title)
+            result = await session.execute(select_stmt)
+            group = result.scalar_one()
             stmt = insert(GroupUser).values(user_id=user.id, group_id=group.id)
             await session.execute(stmt)
 
 
-async def insert_reminder(reminder: Reminder, users_id: list[int]) -> None:
+async def insert_reminder(reminder: Reminder, users_id: set) -> Reminder:
     """
     Добавляет напоминание и запись о напоминании для пользователей в базу данных
     """
@@ -155,6 +183,7 @@ async def insert_reminder(reminder: Reminder, users_id: list[int]) -> None:
                 reminder_id=reminder.id,
             )
             session.add(reminders_users)
+    return reminder
 
 
 async def update_reminder_status_to_done(reminder_id: int, user_id: int) -> None:
@@ -174,7 +203,8 @@ async def select_reminder_users_status(reminder_id: int) -> list[(ReminderUser.u
     Возвращает список пользователей и отметку о статусе выполнения напоминания
     """
     async with session_factory.begin() as session:
-        stmt = select(User.shortname, ReminderUser.status).where(ReminderUser.reminder_id == reminder_id)
+        stmt = select(User.shortname, ReminderUser.status).join_from(ReminderUser, User)\
+            .where(ReminderUser.reminder_id == reminder_id)
         result = await session.execute(stmt)
         users = result.all()
         return users
@@ -220,7 +250,7 @@ async def check_reminder_for_completion(reminder_id: int) -> None:
                 return
         reminder = await session.get(Reminder, reminder_id)
         reminder.status = True
-        new_time_delete = dt.datetime.now() + dt.timedelta(days=3)
+        new_time_delete = dt.datetime.date(dt.datetime.today()) + dt.timedelta(days=3)
         if not reminder.date_delete or reminder.date_delete > new_time_delete:
             reminder.date_delete = new_time_delete
 
@@ -236,7 +266,22 @@ async def select_users_for_reminder(reminder_id: int) -> list[User]:
         return users
 
 
-async def select_reminder_creator(reminder_id: int) -> User:
+async def delete_group(group_id: int) -> None:
+    async with session_factory.begin() as session:
+        group = await session.get(Group, group_id)
+        await session.delete(group)
+
+
+async def delete_reminder_scheduler() -> None:
+    """
+    Удаляет напоминания, работает с scheduler
+    """
+    async with session_factory.begin() as session:
+        stmt = delete(Reminder).where(Reminder.date_delete >= dt.date.today())
+        await session.execute(stmt)
+
+
+async def select_creator(reminder_id: int) -> User:
     """
     Возвращает пользователя создавшего напоминание
     """

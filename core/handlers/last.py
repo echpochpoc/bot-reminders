@@ -2,7 +2,7 @@ from aiogram import types, Dispatcher
 
 
 async def echo_handler(message: types.Message):
-    await message.answer(message.text)
+    await message.answer('Я тебя не понимаю, используй команды или кнопки. Для помощи нажми на /help')
 
 
 def register_handler(dp: Dispatcher):

@@ -71,6 +71,7 @@ async def get_photo(message: types.Message, state: FSMContext):
 
 async def skip_photo(call: types.CallbackQuery, state: FSMContext):
     await call.message.answer('Выбор фото пропущен')
+    await call.answer()
     await state.update_data(photo=None)
     await msg_get_groups(call.message)
 

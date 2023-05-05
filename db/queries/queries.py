@@ -272,6 +272,12 @@ async def delete_group(group_id: int) -> None:
         await session.delete(group)
 
 
+async def delete_user(user_id: int) -> None:
+    async with session_factory.begin() as session:
+        user = await session.get(User, user_id)
+        await session.delete(user)
+
+
 async def delete_reminder_scheduler() -> None:
     """
     Удаляет напоминания, работает с scheduler

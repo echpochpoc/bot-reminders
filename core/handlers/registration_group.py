@@ -67,7 +67,7 @@ async def send_groups(message: types.Message) -> None:
                                  f'Описание: {group.description}',
                                  reply_markup=kb)
     else:
-        message.answer('Групп не найдено, создайте новые /add_group')
+        await message.answer('Групп не найдено, создайте новые /add_group')
 
 
 async def delete_groups(call: types.CallbackQuery) -> None:
@@ -77,7 +77,7 @@ async def delete_groups(call: types.CallbackQuery) -> None:
         await call.answer('Группа удалена')
         await call.message.delete()
     else:
-        call.answer('У вас нет прав удалять группы')
+        await call.answer('У вас нет прав удалять группы')
 
 
 def register_handler(dp: Dispatcher):

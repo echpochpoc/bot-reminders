@@ -102,13 +102,14 @@ async def send_reminder_scheduler() -> None:
     """
     reminders = await queries.select_reminder_for_send()
     for reminder in reminders:
-        msg_text = get_msg_text(reminder)
-        kb = keyboards.get_inline_kb_reminder_done(reminder_id=reminder.id)
-        users = await queries.select_users_for_reminder(reminder_id=reminder.id)
-        for user in users:
-            await bot.send_message(chat_id=user.telegram_id,
-                                   text=f'🟥🟥🟥🟥🟥🟥\n{msg_text}',
-                                   reply_markup=kb)
+        if reminder.status is False:
+            msg_text = get_msg_text(reminder)
+            kb = keyboards.get_inline_kb_reminder_done(reminder_id=reminder.id)
+            users = await queries.select_users_for_reminder(reminder_id=reminder.id)
+            for user in users:
+                await bot.send_message(chat_id=user.telegram_id,
+                                       text=f'🟥🟥🟥🟥🟥🟥\n{msg_text}',
+                                       reply_markup=kb)
 
 
 def register_handler(dp: Dispatcher):

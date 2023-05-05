@@ -6,31 +6,35 @@ async def set_commands(bot: Bot):
     commands = [
         BotCommand(
             command='reg',
-            description='Регистрации пользователя'
+            description='Регистрация'
         ),
         BotCommand(
             command='reminder',
             description='Создать напоминание'
         ),
         BotCommand(
-            command='test',
-            description='Тестирование'
-        ),
-        BotCommand(
             command='cancel',
             description='Отмена'
+        ),
+        BotCommand(
+            command='keyboard',
+            description='Создать клавиатуру'
+        ),
+        BotCommand(
+            command='send_groups',
+            description='Список группы'
+        ),
+        BotCommand(
+            command='send_users',
+            description='Список пользователей'
         ),
         BotCommand(
             command='add_group',
             description='Добавить группу'
         ),
         BotCommand(
-            command='delete_group',
-            description='Удалить группы'
-        ),
-        BotCommand(
-            command='keyboard',
-            description='Создать клавиатуру'
+            command='help',
+            description='Помощь'
         ),
     ]
     await bot.set_my_commands(commands, BotCommandScopeDefault())

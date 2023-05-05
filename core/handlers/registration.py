@@ -1,8 +1,11 @@
+import re
+
 from aiogram import types, Dispatcher
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters import Text
 
+from core.config import ADMIN_ID
 import core.handlers.basic
 from core.filters import StateClassFilter
 from core.keyboards import keyboards
@@ -127,8 +130,36 @@ async def go_back(message: types.message, state: FSMContext):
         await function_dict[now_state](message)
 
 
+async def send_users(message: types.Message) -> None:
+    users = await queries.select_users_all()
+    if users:
+        for user in users:
+            kb = keyboards.get_inline_kb_user_delete(user_id=user.id)
+            groups = await queries.select_groups_with_user(telegram_id=user.telegram_id)
+            text = f'Ваш профиль:\n' \
+                   f'ID: {user.telegram_id}\n' \
+                   f'ФИО: {user.fullname}\n' \
+                   f'Псевдоним: {user.shortname}\n' \
+                   f'Группы: {", ".join([group.title for group in groups])}'
+            await message.answer(text=text, reply_markup=kb)
+    else:
+        await message.answer('Пользователей нет')
+
+
+async def delete_user(call: types.CallbackQuery) -> None:
+    if call.message.chat.id == int(ADMIN_ID):
+        user_id = int(re.findall(r'\d+', call.data)[0])
+        await queries.delete_user(user_id=user_id)
+        await call.answer('Пользователь удален')
+        await call.message.delete()
+    else:
+        await call.answer('У вас нет прав удалять пользователей')
+
+
 def register_handler(dp: Dispatcher):
     dp.register_message_handler(registration_start, commands=['reg'])
+    dp.register_message_handler(send_users, commands=['send_users'])
+    dp.register_callback_query_handler(delete_user, Text(startswith='delete_user'))
     dp.register_message_handler(go_back, StateClassFilter(state_class='RegistrationState'),
                                 Text(equals='⬅️Назад'), state='*')
 

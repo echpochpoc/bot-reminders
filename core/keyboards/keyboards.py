@@ -124,6 +124,13 @@ def get_inline_kb_group_delete(group_id: int) -> InlineKeyboardMarkup:
     return kb
 
 
+def get_inline_kb_user_delete(user_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup()
+    kb.insert(InlineKeyboardButton(text='Удалить',
+                                   callback_data=f'delete_user_{user_id}'))
+    return kb
+
+
 def get_inline_kb_groups(groups: list[models.Group]) -> InlineKeyboardMarkup:
     """
     Создает inline клавиатуру, для выбора групп
